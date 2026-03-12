@@ -10,10 +10,10 @@ import io
 # ⚙️ KHU VỰC CÀI ĐẶT THÔNG SỐ (BẠN CHỈNH SỬA Ở ĐÂY)
 # =====================================================================
 WHISPER_MODEL_SIZE = "base"  # Chọn: "tiny", "base", "small", "medium", "large". Máy yếu chọn base/tiny.
-COMPUTE_DEVICE = "cpu"       # Thay bằng "cuda" nếu máy bạn có card rời NVIDIA.
-COMPUTE_TYPE = "int8"        # Dùng "float16" nếu chạy trên GPU (cuda) để mượt hơn.
+COMPUTE_DEVICE = "cuda"       # Thay bằng "cuda" nếu máy bạn có card rời NVIDIA.
+COMPUTE_TYPE = "float16"        # Dùng "float16" nếu chạy trên GPU (cuda) để mượt hơn.
 
-RECORD_TIMEOUT = 5           # Thời gian tối đa (giây) để ghi âm 1 câu trước khi dịch. (Chỉnh nhỏ thì dịch nhanh, nhưng dễ đứt câu).
+RECORD_TIMEOUT = 3           # Thời gian tối đa (giây) để ghi âm 1 câu trước khi dịch. (Chỉnh nhỏ thì dịch nhanh, nhưng dễ đứt câu).
 PHRASE_TIME_LIMIT = 5        # Thời lượng ngắt câu mặc định.
 ENERGY_THRESHOLD = 300       # Độ nhạy âm thanh. Môi trường ồn thì tăng lên (vd: 1000).
 
