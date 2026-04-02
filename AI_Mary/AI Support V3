@@ -1,0 +1,268 @@
+import tkinter as tk
+from tkinter import scrolledtext
+import ctypes
+import threading
+import subprocess
+import random
+import os
+import unicodedata
+import re
+
+# Cố định đường dẫn Chocolatey chuẩn của Windows
+CHOCO_PATH = r"C:\ProgramData\chocolatey\bin\choco.exe"
+if not os.path.exists(CHOCO_PATH):
+    CHOCO_PATH = "choco" 
+
+# ==========================================
+# BỘ NÃO AI: NHẬN DIỆN Ý ĐỊNH & BÓC TÁCH TỪ KHÓA
+# ==========================================
+def extract_intent_and_target(user_input):
+    text = unicodedata.normalize('NFC', user_input.lower().strip())
+    
+    thanks_keywords = ["cảm ơn", "thanks", "thank", "ok", "tạm biệt", "bye", "xong", "được rồi"]
+    if any(word in text for word in thanks_keywords):
+        return "gratitude", ""
+
+    if any(word in text for word in ["danh sách", "liệt kê", "list", "tất cả"]):
+        return "list", ""
+
+    search_keywords = ["tìm", "tim", "search", "tra ", "tra cứu"]
+    if any(kw in text for kw in search_keywords):
+        words = text.split()
+        stop_words = ["anh", "muốn", "tôi", "cần", "tìm", "tim", "search", "tra", "cứu", "thử", "xem", "phần", "mềm", "ứng", "dụng", "giúp", "hộ"]
+        query = " ".join([w for w in words if w not in stop_words]).strip()
+        return "search", query
+
+    if any(word in text for word in ["gỡ", "xóa", "uninstall", "remove"]):
+        intent = "uninstall"
+    elif any(word in text for word in ["hướng dẫn", "cách", "làm sao"]):
+        intent = "guide"
+    else:
+        intent = "install"
+        
+    words = text.split()
+    stop_words = ["hướng", "dẫn", "cách", "làm", "sao", "để", "cài", "cai", "đặt", "setup", "gỡ", "xóa", "uninstall", "remove", "giúp", "tôi", "anh", "cho", "phần", "mềm", "ứng", "dụng", "hộ", "nhé", "luôn"]
+    query = " ".join([w for w in words if w not in stop_words]).strip()
+    
+    return intent, query
+
+# ==========================================
+# TƯƠNG TÁC HỆ THỐNG
+# ==========================================
+def run_live_search(query):
+    try:
+        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        result = subprocess.run(
+            f'"{CHOCO_PATH}" search "{query}"', 
+            shell=True, capture_output=True, text=True, creationflags=creation_flags,
+            timeout=20 
+        )
+        
+        output = result.stdout if result.stdout else result.stderr
+        if "is not recognized" in output or "không được nhận dạng" in output:
+            return "❌ Hệ thống không tìm thấy lõi Chocolatey."
+            
+        output = output.replace("Chocolatey", "Yoh").replace("chocolatey", "yoh").replace("choco", "yoh").replace("Choco", "Yoh")
+        return output.strip()
+    except subprocess.TimeoutExpired:
+        return "⏳ Quá thời gian chờ. Máy chủ kho phần mềm đang phản hồi chậm, Anh thử lại sau nhé."
+    except Exception as e:
+        return f"Lỗi thực thi lệnh: {e}"
+
+def get_exact_package_for_install(query):
+    """Xử lý phiên bản và chọn gói cài đặt thông minh nhất"""
+    # 1. Tách phiên bản (VD: "unikey 4.5.0" -> Tên: unikey, Phiên bản: 4.5.0)
+    version_match = re.search(r'\d+(\.\d+)+', query)
+    version = None
+    base_query = query
+    
+    if version_match:
+        version = version_match.group(0)
+        base_query = query.replace(version, '').strip()
+        # Dọn dẹp các ký tự thừa như 'v', '.', '-' ở cuối (VD: "unikey v" -> "unikey")
+        base_query = re.sub(r'[\s\.\-\_v]+$', '', base_query).strip()
+
+    if not base_query: return None, None
+
+    try:
+        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        # Chỉ tra cứu bằng tên gốc
+        result = subprocess.run(
+            f'"{CHOCO_PATH}" search "{base_query}"', 
+            shell=True, capture_output=True, text=True, creationflags=creation_flags,
+            timeout=15
+        )
+        
+        output = result.stdout
+        if "0 packages found" in output: return None, None
+            
+        valid_packages = []
+        for line in output.split('\n'):
+            line = line.strip()
+            if not line or line.startswith("Chocolatey v") or line.startswith("Yoh v") or "packages found" in line.lower(): continue
+            if line.startswith("Title:") or line.startswith("Progress:") or line.lower().startswith("warning:") or line.lower().startswith("error:"): continue
+            
+            package_name = line.split()[0]
+            if package_name.lower() not in ["failed", "error", "warning", "could", "the", "unable"]:
+                valid_packages.append(package_name)
+                
+        if not valid_packages: return None, None
+
+        # 2. Thuật toán Chọn Gói Thông Minh
+        best_pkg = valid_packages[0] # Mặc định lấy gói đầu tiên tìm được
+        base_lower = base_query.lower()
+        
+        for pkg in valid_packages:
+            pkg_lower = pkg.lower()
+            # Ưu tiên 1: Khớp chính xác 100% tên Anh gõ
+            if pkg_lower == base_lower:
+                best_pkg = pkg
+                break
+            # Ưu tiên 2: Khớp với đuôi .install chính thức
+            elif pkg_lower == f"{base_lower}.install":
+                best_pkg = pkg
+                break
+
+        return best_pkg, version
+
+    except subprocess.TimeoutExpired:
+        return None, None
+    except:
+        return None, None
+
+def install_software_as_admin(package_name, version=None):
+    cmd = f'"{CHOCO_PATH}" install {package_name} -y'
+    if version: cmd += f' --version {version}'
+    command = f"/c {cmd}"
+    
+    try:
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", "cmd.exe", command, None, 1)
+        return True
+    except Exception:
+        return False
+
+def uninstall_software_as_admin(package_name, version=None):
+    cmd = f'"{CHOCO_PATH}" uninstall {package_name} -y'
+    if version: cmd += f' --version {version}'
+    command = f"/c {cmd}"
+    
+    try:
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", "cmd.exe", command, None, 1)
+        return True
+    except Exception:
+        return False
+
+# ==========================================
+# GIAO DIỆN CHATBOT
+# ==========================================
+class YohSupportApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Jarvis - Yoh Support Assistant")
+        self.root.geometry("700x750")
+        self.root.configure(bg="#f4f4f9")
+
+        self.chat_area = scrolledtext.ScrolledText(root, wrap=tk.WORD, state='disabled', font=("Consolas", 10), bg="#1e1e1e", fg="#d4d4d4")
+        self.chat_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+
+        input_frame = tk.Frame(root, bg="#f4f4f9")
+        input_frame.pack(padx=10, pady=(0, 10), fill=tk.X)
+
+        self.entry_box = tk.Entry(input_frame, font=("Segoe UI", 12))
+        self.entry_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        self.entry_box.bind("<Return>", self.send_message)
+
+        send_btn = tk.Button(input_frame, text="Gửi", command=self.send_message, bg="#007acc", fg="white", font=("Segoe UI", 10, "bold"))
+        send_btn.pack(side=tk.RIGHT)
+
+        self.insert_message("Yoh Support", "Chào Anh! Hệ thống Yoh Support đã sẵn sàng.\nVí dụ: 'cài notepadplusplus' hoặc 'cài unikey 4.5.230808'.")
+
+    def insert_message(self, sender, message):
+        self.chat_area.config(state='normal')
+        if sender == "Anh":
+            self.chat_area.insert(tk.END, f"\n> {sender}: {message}\n")
+        else:
+            self.chat_area.insert(tk.END, f"{sender}:\n{message}\n\n")
+        self.chat_area.config(state='disabled')
+        self.chat_area.yview(tk.END)
+
+    def process_response(self, user_text):
+        intent, target_name = extract_intent_and_target(user_text)
+
+        if intent == "gratitude":
+            wishes = ["Rất sẵn lòng được hỗ trợ Anh! ✨", "Dạ không có gì ạ! Cần gì Anh cứ gọi Yoh Support nhé! 🚀"]
+            self.insert_message("Yoh Support", random.choice(wishes))
+            return
+
+        if intent == "list":
+            self.insert_message("Yoh Support", "📋 Chế độ tra cứu kho phần mềm online. Anh gõ: 'tìm <tên phần mềm>' để xem danh sách nhé.")
+            return
+
+        if not target_name:
+            self.insert_message("Yoh Support", "Dạ, Anh cần xử lý phần mềm nào ạ?")
+            return
+
+        if intent == "search":
+            self.insert_message("Yoh Support", f"🔍 Đang quét kho tổng để tìm '{target_name}', Anh vui lòng chờ...")
+            threading.Thread(target=self.thread_search, args=(target_name,)).start()
+            return
+
+        if intent == "uninstall":
+            self.insert_message("Yoh Support", f"🗑️ Đang chuẩn bị tiến trình gỡ cài đặt cho '{target_name}'...")
+            threading.Thread(target=self.thread_uninstall, args=(target_name,)).start()
+            return
+
+        self.insert_message("Yoh Support", f"⚙️ Đang tra cứu để lấy gói cài đặt chuẩn cho '{target_name}'...")
+        threading.Thread(target=self.thread_install, args=(intent, target_name)).start()
+
+    def thread_search(self, query):
+        output = run_live_search(query)
+        if not output.strip() or "0 packages found" in output:
+            self.insert_message("Yoh Support", f"❌ Không tìm thấy thông tin nào cho '{query}' trên hệ thống.")
+        else:
+            self.insert_message("Yoh Support", f"📦 Kết quả tra cứu thực tế:\n{'-'*60}\n{output}")
+
+    def thread_install(self, intent, target_name):
+        exact_package, version = get_exact_package_for_install(target_name)
+        if not exact_package:
+            self.insert_message("Yoh Support", f"❌ Rất tiếc, tôi chưa tìm thấy hoặc quá thời gian chờ tra cứu gói '{target_name}'.")
+            return
+            
+        pkg_display = f"'{exact_package}' (Phiên bản: {version})" if version else f"'{exact_package}'"
+            
+        if intent == "guide":
+            cmd_guide = f"yoh install {exact_package} -y"
+            if version: cmd_guide += f" --version {version}"
+            self.insert_message("Yoh Support", f"💡 Cách cài đặt:\n{cmd_guide}")
+        else:
+            self.insert_message("Yoh Support", f"✅ Đã chốt gói: {pkg_display}. Đang yêu cầu quyền hệ thống...")
+            if install_software_as_admin(exact_package, version):
+                self.insert_message("Yoh Support", f"🚀 Tiến trình cài đặt đã khởi chạy. Cửa sổ CMD sẽ tự động đóng khi hoàn tất.")
+            else:
+                self.insert_message("Yoh Support", "⚠️ Không thể chạy cài đặt (từ chối quyền hoặc lỗi).")
+
+    def thread_uninstall(self, target_name):
+        exact_package, version = get_exact_package_for_install(target_name)
+        if not exact_package:
+            self.insert_message("Yoh Support", f"❌ Không tìm thấy tên gói chính thức của '{target_name}' để tiến hành gỡ bỏ.")
+            return
+            
+        pkg_display = f"'{exact_package}' (Phiên bản: {version})" if version else f"'{exact_package}'"
+
+        self.insert_message("Yoh Support", f"✅ Đã xác định gói cần gỡ: {pkg_display}. Đang yêu cầu quyền hệ thống...")
+        if uninstall_software_as_admin(exact_package, version):
+            self.insert_message("Yoh Support", f"🚀 Tiến trình gỡ cài đặt đã khởi chạy. Cửa sổ CMD sẽ tự động đóng khi hoàn tất.")
+        else:
+            self.insert_message("Yoh Support", "⚠️ Không thể chạy lệnh gỡ cài đặt (từ chối quyền hoặc lỗi hệ thống).")
+
+    def send_message(self, event=None):
+        user_text = self.entry_box.get()
+        if not user_text.strip(): return
+        self.insert_message("Anh", user_text)
+        self.entry_box.delete(0, tk.END)
+        self.process_response(user_text)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = YohSupportApp(root)
+    root.mainloop()
