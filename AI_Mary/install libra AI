@@ -1,0 +1,64 @@
+import os
+import sys
+import ctypes
+import subprocess
+import time
+
+def is_admin():
+    """Kiểm tra xem script có đang chạy bằng quyền Admin hay không."""
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+def main():
+    # 1. Kiểm tra quyền Admin
+    if not is_admin():
+        print("Vui long chay file nay bang quyen Administrator (Run as Administrator)!")
+        input("Nhan Enter de thoat...")
+        sys.exit(1)
+
+    # 2. Cài đặt Chocolatey
+    print("1. Dang cai dat he thong loi (auto install software)...")
+    ps_install_cmd = (
+        "Set-ExecutionPolicy Bypass -Scope Process -Force; "
+        "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; "
+        "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
+    )
+    
+    # Chạy lệnh cài đặt thông qua PowerShell
+    subprocess.run(["powershell", "-Command", ps_install_cmd], capture_output=False)
+
+    # Đợi hệ thống xử lý
+    time.sleep(5)
+
+    # 3. Tạo lệnh custom 'Yoh' thay cho 'choco'
+    print("2. Dang thiet lap lenh Yoh...")
+    choco_bin_path = r"C:\ProgramData\chocolatey\bin"
+    
+    # Đảm bảo thư mục bin tồn tại (thường thì cài xong choco sẽ có)
+    if not os.path.exists(choco_bin_path):
+        os.makedirs(choco_bin_path, exist_ok=True)
+        
+    yoh_bat_path = os.path.join(choco_bin_path, "Yoh.bat")
+    bat_content = "@echo off\nchoco %*"
+    
+    try:
+        with open(yoh_bat_path, "w", encoding="ascii") as f:
+            f.write(bat_content)
+    except Exception as e:
+        print(f"Loi khi tao file Yoh.bat: {e}")
+
+    # 4. In thông báo thành công
+    print("\n======================================================")
+    print("CAI DAT THANH CONG!")
+    print("He thong da san sang. Anh co the su dung cac lenh:")
+    print("  Yoh search <ten_phan_mem>")
+    print("  Yoh install <ten_phan_mem> -y")
+    print("Luu y: Vui long dong cua so hien tai va mo lai Command Prompt hoac PowerShell de lenh 'Yoh' co hieu luc.")
+    print("======================================================")
+    
+    input("\nNhan Enter de thoat chuong trinh...")
+
+if __name__ == "__main__":
+    main()
