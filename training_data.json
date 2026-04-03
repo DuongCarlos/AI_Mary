@@ -1,0 +1,27 @@
+{
+    "install": [
+        "cài cho anh",
+        "setup phần mềm"
+    ],
+    "uninstall": [
+        "gỡ ứng dụng",
+        "xóa phần mềm"
+    ],
+    "search": [
+        "tìm thử xem",
+        "tra cứu"
+    ],
+    "greeting": [
+        "xin chào",
+        "hello",
+        "hi"
+    ],
+    "smalltalk": [
+        "tâm sự đi",
+        "buồn quá"
+    ],
+    "about": [
+        "bạn làm được gì",
+        "chức năng là gì"
+    ]
+}

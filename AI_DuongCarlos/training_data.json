@@ -1,0 +1,46 @@
+{
+    "install": [
+        "cài cho anh phần mềm",
+        "cài đặt giúp tôi",
+        "setup cái này đi",
+        "install hộ nhé",
+        "tải và cài giùm",
+        "triển khai ứng dụng",
+        "bơm cho anh cái",
+        "quất luôn phần mềm"
+    ],
+    "uninstall": [
+        "gỡ phần mềm",
+        "xóa ứng dụng này đi",
+        "uninstall giúp anh",
+        "remove nó ra khỏi máy",
+        "tiêu diệt phần mềm",
+        "xóa sổ app này"
+    ],
+    "search": [
+        "tìm thử xem có không",
+        "tra cứu kho phần mềm",
+        "search giúp anh",
+        "tìm kiếm app",
+        "kiểm tra xem có gói này không",
+        "tìm xem nào"
+    ],
+    "greeting": [
+        "xin chào", "hello", "hi", "chào em", "alo", "ê", "có ai ở nhà không"
+    ],
+    "about": [
+        "em làm được gì", "bạn có tính năng gì", "chức năng của bạn là gì", "bạn là ai", "tên gì"
+    ],
+    "smalltalk": [
+        "nói chuyện chút", "tâm sự đi", "chán quá", "buồn thật", "kể chuyện vui nghe xem"
+    ],
+    "ask_permission": [
+        "hỏi chút được không", "cho hỏi xíu", "anh muốn hỏi cái này", "hỏi một câu nhé"
+    ],
+    "confirm": [
+        "có", "ok", "ừ", "cài đi", "triển đi", "đồng ý", "quất", "duyệt"
+    ],
+    "cancel": [
+        "không", "thôi", "hủy", "đừng", "cancel", "dừng lại", "từ chối"
+    ]
+}
